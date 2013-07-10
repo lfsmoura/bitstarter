@@ -22,6 +22,7 @@ References:
 */
 
 var fs = require('fs');
+var restler = require('restler');
 var program = require('commander');
 var cheerio = require('cheerio');
 var HTMLFILE_DEFAULT = "index.html";
@@ -36,23 +37,25 @@ var assertFileExists = function(infile) {
     return instr;
 };
 
-var cheerioHtmlFile = function(htmlfile) {
-    return cheerio.load(fs.readFileSync(htmlfile));
-};
-
 var loadChecks = function(checksfile) {
     return JSON.parse(fs.readFileSync(checksfile));
 };
 
-var checkHtmlFile = function(htmlfile, checksfile) {
-    $ = cheerioHtmlFile(htmlfile);
+var checkUrl = function(url, checksfile) {
+  restler.get(url).on('complete', function(result) { 
+    checkHtml(result, checksfile);   
+  });
+};
+var checkHtml = function(html, checksfile) {
+    $ = cheerio.load(html);
     var checks = loadChecks(checksfile).sort();
     var out = {};
     for(var ii in checks) {
         var present = $(checks[ii]).length > 0;
         out[checks[ii]] = present;
     }
-    return out;
+    outJson = JSON.stringify(out, null, 4);
+    console.log(outJson);
 };
 
 var clone = function(fn) {
@@ -65,10 +68,13 @@ if(require.main == module) {
     program
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
+        .option('-u, --url <url>', 'url')
         .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+    var checkJson;
+    if (program.url)
+      checkJson = checkUrl(program.url, program.checks);
+    else
+      checkJson = checkHtml(fs.readFileSync(program.file), program.checks);
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
